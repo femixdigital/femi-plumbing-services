@@ -1398,12 +1398,3 @@ body {
   user-select: text !important;
   -webkit-user-select: text !important;
 }
-
-body::after {
-  content: "© YourSiteName";
-  position: fixed;
-  bottom: 10px;
-  right: 10px;
-  opacity: 0.2;
-  font-size: 20px;
-}
