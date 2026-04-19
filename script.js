@@ -1,31 +1,35 @@
-/* ═══════════════════════════════════════════════════════════
-   FEMIX PLUMBING v2 — script.js
-   SPA interactions · 3D tilt · Carousel · Chatbot (Claude)
-   Notifications · PWA-ready · Fintech micro-interactions
-   ═══════════════════════════════════════════════════════════ */
-
+/* ════════════════════════════════════════════════════
+   FEMIX PLUMBING — script.js
+   SPA interactions · Carousel · Chatbot (Claude AI)
+   Toast system · PWA · Tilt · Notifications · Scroll
+   ════════════════════════════════════════════════════ */
 'use strict';
 
-/* ─────────────────────────────────────────────
+/* ─── DOM HELPERS ─── */
+const $  = (s, ctx = document) => ctx.querySelector(s);
+const $$ = (s, ctx = document) => [...ctx.querySelectorAll(s)];
+
+/* ════════════════════════════════════════════════════
    1. LOADER
-───────────────────────────────────────────── */
+════════════════════════════════════════════════════ */
 window.addEventListener('load', () => {
+  const loader = $('#loader');
   setTimeout(() => {
-    document.getElementById('loader')?.classList.add('hidden');
-    // Trigger hero animations
-    document.querySelectorAll('.hero-section .fade-up').forEach((el, i) => {
-      setTimeout(() => el.classList.add('visible'), i * 120);
+    loader?.classList.add('out');
+    // Kick off hero entrance
+    $$('.hero-section .reveal-fade').forEach((el, i) => {
+      setTimeout(() => el.classList.add('visible'), 100 + i * 110);
     });
-  }, 1400);
+  }, 1350);
 });
 
-/* ─────────────────────────────────────────────
-   2. THEME SYSTEM
-───────────────────────────────────────────── */
-(function () {
+/* ════════════════════════════════════════════════════
+   2. THEME
+════════════════════════════════════════════════════ */
+(function themeSystem() {
   const html = document.documentElement;
-  const btns = document.querySelectorAll('.theme-pill button');
-  const KEY  = 'femix-theme';
+  const KEY  = 'femix-v3-theme';
+  const btns = $$('[data-theme]', $('.theme-switch'));
 
   function apply(t) {
     html.setAttribute('data-theme', t);
@@ -41,8 +45,7 @@ window.addEventListener('load', () => {
   if (saved) {
     apply(saved);
   } else {
-    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    apply(dark ? 'dark' : 'light');
+    apply(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
       if (!localStorage.getItem(KEY)) apply(e.matches ? 'dark' : 'light');
     });
@@ -51,63 +54,67 @@ window.addEventListener('load', () => {
   btns.forEach(b => b.addEventListener('click', () => apply(b.dataset.theme)));
 })();
 
-/* ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════
    3. TOAST NOTIFICATION SYSTEM
-───────────────────────────────────────────── */
-const Toast = {
-  container: document.getElementById('toastContainer'),
+════════════════════════════════════════════════════ */
+const Toast = (function() {
+  const container = $('#toastContainer');
+  const ICONS = { success: '✓', error: '⚠', info: 'ℹ', warning: '⚡' };
 
-  show(msg, type = 'info', duration = 4000) {
-    const icons = { success: '✓', error: '⚠', info: 'ℹ' };
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `
-      <span class="toast-icon">${icons[type] || '📢'}</span>
-      <span class="toast-msg">${msg}</span>
-      <button class="toast-close" aria-label="Close">✕</button>
+  function show(title, msg, type = 'info', ms = 4200) {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.innerHTML = `
+      <span class="toast-icon">${ICONS[type] || '📢'}</span>
+      <div class="toast-body">
+        ${title ? `<div class="toast-title">${title}</div>` : ''}
+        ${msg   ? `<div class="toast-msg">${msg}</div>` : ''}
+      </div>
+      <button class="toast-close" aria-label="Close notification">✕</button>
     `;
-    this.container.appendChild(toast);
+    container.appendChild(el);
 
-    const remove = () => {
-      toast.classList.add('leaving');
-      toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    const dismiss = () => {
+      el.classList.add('toast-out');
+      el.addEventListener('animationend', () => el.remove(), { once: true });
     };
+    el.querySelector('.toast-close').addEventListener('click', dismiss);
+    setTimeout(dismiss, ms);
+  }
 
-    toast.querySelector('.toast-close').addEventListener('click', remove);
-    setTimeout(remove, duration);
-    return toast;
-  },
+  return {
+    success: (t, m, d) => show(t, m, 'success', d),
+    error:   (t, m, d) => show(t, m, 'error',   d),
+    info:    (t, m, d) => show(t, m, 'info',     d),
+    warn:    (t, m, d) => show(t, m, 'warning',  d),
+  };
+})();
 
-  success(msg, d) { return this.show(msg, 'success', d); },
-  error(msg, d)   { return this.show(msg, 'error', d); },
-  info(msg, d)    { return this.show(msg, 'info', d); }
-};
-
-/* ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════
    4. PARTICLE CANVAS
-───────────────────────────────────────────── */
-(function () {
-  const canvas = document.getElementById('bgCanvas');
+════════════════════════════════════════════════════ */
+(function particles() {
+  const canvas = $('#bgCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   let W, H, pts = [], raf;
 
-  class Pt {
+  class P {
     constructor() { this.reset(); }
     reset() {
       this.x   = Math.random() * W;
       this.y   = Math.random() * H;
-      this.r   = Math.random() * 1.4 + 0.2;
-      this.vx  = (Math.random() - 0.5) * 0.25;
-      this.vy  = (Math.random() - 0.5) * 0.25;
+      this.r   = Math.random() * 1.3 + 0.2;
+      this.vx  = (Math.random() - 0.5) * 0.22;
+      this.vy  = (Math.random() - 0.5) * 0.22;
       this.a   = Math.random();
       this.da  = (Math.random() * 0.003 + 0.001) * (Math.random() < 0.5 ? 1 : -1);
-      this.hue = Math.random() < 0.4 ? 42 : Math.random() < 0.7 ? 228 : 190;
+      this.hue = [42, 228, 185][Math.floor(Math.random() * 3)];
     }
   }
 
   const resize = () => { W = canvas.width = innerWidth; H = canvas.height = innerHeight; };
-  const spawn  = () => { pts = Array.from({ length: Math.min(Math.floor(W * H / 14000), 80) }, () => new Pt()); };
+  const spawn  = () => { pts = Array.from({ length: Math.min(Math.floor(W * H / 14000), 78) }, () => new P()); };
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
@@ -118,21 +125,16 @@ const Toast = {
       p.a = Math.max(0, Math.min(1, p.a + p.da));
       if (p.a <= 0 || p.a >= 1) p.da *= -1;
 
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = `hsla(${p.hue},65%,65%,${p.a * 0.7})`;
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${p.hue},60%,65%,${p.a * 0.65})`; ctx.fill();
 
       for (let j = i + 1; j < pts.length; j++) {
         const dx = p.x - pts[j].x, dy = p.y - pts[j].y;
         const d = Math.hypot(dx, dy);
-        if (d < 105) {
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
-          ctx.lineTo(pts[j].x, pts[j].y);
-          ctx.strokeStyle = `hsla(${p.hue},55%,60%,${(1 - d / 105) * 0.08})`;
-          ctx.lineWidth = 0.4;
-          ctx.stroke();
+        if (d < 100) {
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(pts[j].x, pts[j].y);
+          ctx.strokeStyle = `hsla(${p.hue},55%,60%,${(1 - d / 100) * 0.07})`;
+          ctx.lineWidth = 0.4; ctx.stroke();
         }
       }
     }
@@ -147,91 +149,113 @@ const Toast = {
   });
 })();
 
-/* ─────────────────────────────────────────────
-   5. HEADER — scroll elevation + active nav
-───────────────────────────────────────────── */
-const header = document.getElementById('header');
-const totalH = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--total-h')) || 98;
+/* ════════════════════════════════════════════════════
+   5. SCROLL PROGRESS BAR
+════════════════════════════════════════════════════ */
+(function progressBar() {
+  const fill = $('.scroll-progress-fill');
+  if (!fill) return;
+  window.addEventListener('scroll', () => {
+    const h = document.documentElement.scrollHeight - innerHeight;
+    fill.style.width = h > 0 ? `${(scrollY / h) * 100}%` : '0%';
+  }, { passive: true });
+})();
 
+/* ════════════════════════════════════════════════════
+   6. HEADER SCROLL
+════════════════════════════════════════════════════ */
+const header = $('#header');
 window.addEventListener('scroll', () => {
-  header?.classList.toggle('elevated', window.scrollY > 40);
+  header?.classList.toggle('scrolled', scrollY > 40);
 }, { passive: true });
 
-/* ─────────────────────────────────────────────
-   6. MOBILE DRAWER
-───────────────────────────────────────────── */
-const hamBtn    = document.getElementById('hamBtn');
-const mobDrawer = document.getElementById('mobDrawer');
-const mobOverlay = document.getElementById('mobOverlay');
+/* ════════════════════════════════════════════════════
+   7. MOBILE DRAWER
+════════════════════════════════════════════════════ */
+const drawer  = $('#mobDrawer');
+const overlay = $('#mobOverlay');
+const hamBtn  = $('#hamBtn');
 
 function openDrawer() {
-  mobDrawer?.classList.add('open');
-  mobOverlay?.classList.add('visible');
+  drawer?.classList.add('open');
+  overlay?.classList.add('show');
   hamBtn?.classList.add('open');
   hamBtn?.setAttribute('aria-expanded', 'true');
-  mobDrawer?.setAttribute('aria-hidden', 'false');
+  drawer?.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
 }
 function closeDrawer() {
-  mobDrawer?.classList.remove('open');
-  mobOverlay?.classList.remove('visible');
+  drawer?.classList.remove('open');
+  overlay?.classList.remove('show');
   hamBtn?.classList.remove('open');
   hamBtn?.setAttribute('aria-expanded', 'false');
-  mobDrawer?.setAttribute('aria-hidden', 'true');
+  drawer?.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
 }
 
-hamBtn?.addEventListener('click', () => mobDrawer?.classList.contains('open') ? closeDrawer() : openDrawer());
-mobOverlay?.addEventListener('click', closeDrawer);
+hamBtn?.addEventListener('click', () =>
+  drawer?.classList.contains('open') ? closeDrawer() : openDrawer()
+);
+overlay?.addEventListener('click', closeDrawer);
+$('#closeDrawer')?.addEventListener('click', closeDrawer);
 
-/* ─────────────────────────────────────────────
-   7. SPA SMOOTH NAVIGATION
-───────────────────────────────────────────── */
-function scrollToSection(id) {
-  const el = document.getElementById(id) || document.querySelector(id);
-  if (!el) return;
-  window.scrollTo({
-    top: el.getBoundingClientRect().top + window.scrollY - totalH(),
-    behavior: 'smooth'
-  });
-  closeDrawer();
+/* ════════════════════════════════════════════════════
+   8. SPA NAVIGATION
+════════════════════════════════════════════════════ */
+function navH() {
+  return parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-total')) || 92;
 }
 
-document.querySelectorAll('[data-nav], a[href^="#"]').forEach(a => {
+function scrollTo(id) {
+  const el = document.getElementById(id.replace('#', ''));
+  if (!el) return;
+  window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - navH(), behavior: 'smooth' });
+  closeDrawer();
+  closeChatIfOpen();
+}
+
+// Wire all [data-nav] links
+$$('[data-nav]').forEach(a => {
   a.addEventListener('click', e => {
     const href = a.getAttribute('href');
     if (!href?.startsWith('#')) return;
     e.preventDefault();
-    scrollToSection(href);
+    scrollTo(href);
   });
 });
 
-/* ─────────────────────────────────────────────
-   8. SECTION INTERSECTION + SIDE DOTS + NAV ACTIVE
-───────────────────────────────────────────── */
-const sections  = document.querySelectorAll('[data-section]');
-const sideDots  = document.querySelectorAll('.dot');
-const navLinks  = document.querySelectorAll('.nav-link[data-section]');
+// Dropdown nav items that navigate + activate tab
+$$('[data-dd-nav]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    // Close dropdown
+    btn.closest('.nav-dd')?.querySelector('.nav-dd-menu')?.classList.remove('show');
+    scrollTo('#' + btn.dataset.ddNav);
+    // Activate target tab after scroll settles
+    const tab = btn.dataset.tab;
+    if (tab) setTimeout(() => activateTab(tab), 600);
+  });
+});
 
+/* ════════════════════════════════════════════════════
+   9. SECTION OBSERVER — dots + active nav
+════════════════════════════════════════════════════ */
 const sectionObs = new IntersectionObserver(entries => {
   entries.forEach(e => {
-    if (e.isIntersecting) {
-      const id = e.target.id;
-      sideDots.forEach(d => d.classList.toggle('active', d.dataset.target === id));
-      navLinks.forEach(l => l.classList.toggle('active', l.dataset.section === id));
-    }
+    if (!e.isIntersecting) return;
+    const id = e.target.id;
+    $$('.sdot').forEach(d => d.classList.toggle('active', d.dataset.target === id));
+    $$('.nav-link[data-section]').forEach(l => l.classList.toggle('active', l.dataset.section === id));
   });
-}, { threshold: 0.4 });
+}, { threshold: 0.35 });
 
-sections.forEach(s => sectionObs.observe(s));
+$$('[data-section]').forEach(s => sectionObs.observe(s));
 
-sideDots.forEach(dot => {
-  dot.addEventListener('click', () => scrollToSection('#' + dot.dataset.target));
-});
+// Side dots click
+$$('.sdot').forEach(d => d.addEventListener('click', () => scrollTo('#' + d.dataset.target)));
 
-/* ─────────────────────────────────────────────
-   9. SCROLL REVEAL
-───────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════
+   10. SCROLL REVEAL
+════════════════════════════════════════════════════ */
 const revealObs = new IntersectionObserver(entries => {
   entries.forEach(e => {
     if (e.isIntersecting) {
@@ -239,76 +263,88 @@ const revealObs = new IntersectionObserver(entries => {
       revealObs.unobserve(e.target);
     }
   });
-}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+}, { threshold: 0.1, rootMargin: '0px 0px -36px 0px' });
 
-document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => revealObs.observe(el));
+$$('.reveal, .reveal-left, .reveal-right').forEach(el => revealObs.observe(el));
 
-/* ─────────────────────────────────────────────
-   10. HERO FADE-UP (non-hero sections)
-───────────────────────────────────────────── */
-const fadeObs = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      e.target.classList.add('visible');
-      fadeObs.unobserve(e.target);
-    }
-  });
-}, { threshold: 0.08 });
-
-document.querySelectorAll('.fade-up:not(.hero-section .fade-up)').forEach(el => fadeObs.observe(el));
-
-/* ─────────────────────────────────────────────
-   11. LIVE CLOCK
-───────────────────────────────────────────── */
-(function () {
-  const el = document.getElementById('clock');
+/* ════════════════════════════════════════════════════
+   11. CLOCK
+════════════════════════════════════════════════════ */
+(function clock() {
+  const el = $('#clock');
   if (!el) return;
 
   function tick() {
-    const now  = new Date();
-    const h    = String(now.getHours() % 12 || 12).padStart(2, '0');
-    const m    = String(now.getMinutes()).padStart(2, '0');
-    const s    = String(now.getSeconds()).padStart(2, '0');
-    const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
-    const day  = now.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-    const date = now.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
-
-    el.innerHTML = `<span class="ck-date">${day} · ${date}</span><span class="ck-time">${h}:${m}:${s} <small style="opacity:.55;font-size:.64em">${ampm}</small></span>`;
+    const n = new Date();
+    const h = String(n.getHours() % 12 || 12).padStart(2, '0');
+    const m = String(n.getMinutes()).padStart(2, '0');
+    const s = String(n.getSeconds()).padStart(2, '0');
+    const ampm = n.getHours() >= 12 ? 'PM' : 'AM';
+    const day  = n.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+    const date = n.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+    el.innerHTML = `
+      <span class="ck-d">${day} · ${date}</span>
+      <span class="ck-t">${h}:${m}:${s} <small style="opacity:.55;font-size:.62em">${ampm}</small></span>
+    `;
   }
-  tick();
-  setInterval(tick, 1000);
+  tick(); setInterval(tick, 1000);
 })();
 
-/* ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════
    12. SERVICES TAB SYSTEM
-───────────────────────────────────────────── */
-const svcTabs   = document.querySelectorAll('.svc-tab');
-const svcPanels = document.querySelectorAll('.svc-panel');
+════════════════════════════════════════════════════ */
+function activateTab(name) {
+  const tabs   = $$('.svc-tab');
+  const panels = $$('.svc-panel');
+  const ind    = $('#tabIndicator');
 
-svcTabs.forEach(tab => {
-  tab.addEventListener('click', () => {
-    const target = tab.dataset.tab;
-
-    svcTabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
-    svcPanels.forEach(p => { p.classList.remove('active'); p.hidden = true; });
-
-    tab.classList.add('active');
-    tab.setAttribute('aria-selected', 'true');
-
-    const panel = document.getElementById(`tab-${target}`);
-    if (panel) { panel.classList.add('active'); panel.hidden = false; }
+  tabs.forEach(t => {
+    const on = t.dataset.tab === name;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', String(on));
+    if (on && ind) {
+      // Slide indicator
+      const r = t.getBoundingClientRect();
+      const pr = t.closest('.svc-tabs').getBoundingClientRect();
+      ind.style.left  = (r.left - pr.left) + 'px';
+      ind.style.width = r.width + 'px';
+    }
   });
+
+  panels.forEach(p => {
+    const on = p.id === `tab-${name}`;
+    p.classList.toggle('active', on);
+    p.hidden = !on;
+  });
+}
+
+// Init indicator position on load
+window.addEventListener('load', () => {
+  const activeTab = $('.svc-tab.active');
+  if (activeTab) {
+    const r  = activeTab.getBoundingClientRect();
+    const pr = activeTab.closest('.svc-tabs')?.getBoundingClientRect();
+    const ind = $('#tabIndicator');
+    if (ind && pr) {
+      ind.style.left  = (r.left - pr.left) + 'px';
+      ind.style.width = r.width + 'px';
+    }
+  }
 });
 
-/* Service CTA buttons → open contact modal pre-filled */
-document.querySelectorAll('.svc-cta-btn').forEach(btn => {
+$$('.svc-tab').forEach(tab => {
+  tab.addEventListener('click', () => activateTab(tab.dataset.tab));
+});
+
+// Service CTA → open quote modal with pre-selected service
+$$('.panel-cta').forEach(btn => {
   btn.addEventListener('click', () => {
-    const service = btn.dataset.service;
+    const svc = btn.dataset.service;
     openModal('contactModal');
-    const sel = document.getElementById('mfservice');
-    if (sel && service) {
+    const sel = $('#mfservice');
+    if (sel && svc) {
       for (const opt of sel.options) {
-        if (opt.text.includes(service.replace(/&amp;/g, '&').split('(')[0].trim())) {
+        if (opt.text.includes(svc.split('(')[0].trim().replace(/&amp;/g, '&'))) {
           opt.selected = true; break;
         }
       }
@@ -316,427 +352,416 @@ document.querySelectorAll('.svc-cta-btn').forEach(btn => {
   });
 });
 
-/* ─────────────────────────────────────────────
-   13. REVIEWS CAROUSEL
-───────────────────────────────────────────── */
-(function () {
-  const track   = document.getElementById('reviewsTrack');
-  const prevBtn = document.getElementById('revPrev');
-  const nextBtn = document.getElementById('revNext');
-  const dotsWrap = document.getElementById('revDots');
+/* ════════════════════════════════════════════════════
+   13. REVIEW CAROUSEL
+════════════════════════════════════════════════════ */
+(function carousel() {
+  const track    = $('#reviewsTrack');
+  const prevBtn  = $('#revPrev');
+  const nextBtn  = $('#revNext');
+  const pipsWrap = $('#revPips');
   if (!track) return;
 
-  const cards  = track.querySelectorAll('.review-card');
-  let current  = 0;
-  let perView  = 3;
-  let autoPlay;
+  const cards = $$('.review-card', track);
+  let current = 0, perView = 3, auto;
 
-  function calcPerView() {
-    if (window.innerWidth < 700) return 1;
-    if (window.innerWidth < 1050) return 2;
-    return 3;
-  }
+  const ppv = () => window.innerWidth < 700 ? 1 : window.innerWidth < 1024 ? 2 : 3;
 
-  function buildDots() {
-    if (!dotsWrap) return;
-    dotsWrap.innerHTML = '';
+  function buildPips() {
+    if (!pipsWrap) return;
+    pipsWrap.innerHTML = '';
     const count = Math.ceil(cards.length / perView);
     for (let i = 0; i < count; i++) {
       const d = document.createElement('div');
-      d.className = 'rev-dot' + (i === 0 ? ' active' : '');
+      d.className = 'pip' + (i === 0 ? ' on' : '');
       d.addEventListener('click', () => goto(i));
-      dotsWrap.appendChild(d);
+      pipsWrap.appendChild(d);
     }
   }
 
   function goto(idx) {
     const count = Math.ceil(cards.length / perView);
-    current = (idx + count) % count;
-    const cardW = cards[0]?.offsetWidth + 20 || 0;
-    track.style.transform = `translateX(-${current * perView * cardW}px)`;
-    dotsWrap?.querySelectorAll('.rev-dot').forEach((d, i) => d.classList.toggle('active', i === current));
+    current = ((idx % count) + count) % count;
+    const w = cards[0]?.offsetWidth + 20 || 0;
+    track.style.transform = `translateX(-${current * perView * w}px)`;
+    $$('.pip', pipsWrap).forEach((d, i) => d.classList.toggle('on', i === current));
   }
 
   function next() { goto(current + 1); }
   function prev() { goto(current - 1); }
+  function resetAuto() { clearInterval(auto); auto = setInterval(next, 5200); }
 
   prevBtn?.addEventListener('click', () => { prev(); resetAuto(); });
   nextBtn?.addEventListener('click', () => { next(); resetAuto(); });
 
-  function startAuto() { autoPlay = setInterval(next, 5000); }
-  function resetAuto()  { clearInterval(autoPlay); startAuto(); }
-
   // Touch/swipe
-  let startX = 0;
-  track.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
-  track.addEventListener('touchend', e => {
-    const dx = e.changedTouches[0].clientX - startX;
-    if (Math.abs(dx) > 50) { dx < 0 ? next() : prev(); resetAuto(); }
+  let tx = 0;
+  track.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+  track.addEventListener('touchend',   e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 45) { dx < 0 ? next() : prev(); resetAuto(); }
   });
 
-  function init() {
-    perView = calcPerView();
-    buildDots();
-    goto(0);
-    startAuto();
-  }
+  // Keyboard when focused
+  track.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight') { next(); resetAuto(); }
+    if (e.key === 'ArrowLeft')  { prev(); resetAuto(); }
+  });
+
+  function init() { perView = ppv(); buildPips(); goto(0); resetAuto(); }
 
   init();
-  let rDeb;
+  let rd;
   window.addEventListener('resize', () => {
-    clearTimeout(rDeb);
-    rDeb = setTimeout(() => { perView = calcPerView(); buildDots(); goto(0); }, 250);
+    clearTimeout(rd);
+    rd = setTimeout(() => { perView = ppv(); buildPips(); goto(0); }, 250);
   });
 })();
 
-/* ─────────────────────────────────────────────
-   14. 3D TILT EFFECT
-───────────────────────────────────────────── */
-document.querySelectorAll('.tilt-card').forEach(card => {
+/* ════════════════════════════════════════════════════
+   14. 3D TILT CARDS
+════════════════════════════════════════════════════ */
+$$('.tilt-card, .pillar').forEach(card => {
   card.addEventListener('mousemove', e => {
-    const rect = card.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width  - 0.5;
-    const y = (e.clientY - rect.top)  / rect.height - 0.5;
-    card.style.transform = `perspective(600px) rotateX(${-y * 8}deg) rotateY(${x * 8}deg) translateZ(6px)`;
+    const { left, top, width, height } = card.getBoundingClientRect();
+    const x = (e.clientX - left) / width  - 0.5;
+    const y = (e.clientY - top)  / height - 0.5;
+    card.style.transform = `perspective(700px) rotateX(${-y * 7}deg) rotateY(${x * 7}deg) translateZ(6px)`;
   });
   card.addEventListener('mouseleave', () => {
-    card.style.transform = 'perspective(600px) rotateX(0) rotateY(0) translateZ(0)';
+    card.style.transform = 'perspective(700px) rotateX(0) rotateY(0) translateZ(0)';
   });
 });
 
-/* ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════
    15. MODAL SYSTEM
-───────────────────────────────────────────── */
+════════════════════════════════════════════════════ */
 function openModal(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.classList.add('active');
+  el.classList.add('open');
   el.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  // Focus first focusable
+  setTimeout(() => el.querySelector('input, select, button')?.focus(), 100);
 }
-
 function closeModal(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.classList.remove('active');
+  el.classList.remove('open');
   el.setAttribute('aria-hidden', 'true');
-  if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
+  if (!$$('.modal-overlay.open').length) document.body.style.overflow = '';
 }
 
-// Contact modal triggers
-document.getElementById('heroQuoteBtn')?.addEventListener('click', () => openModal('contactModal'));
-document.getElementById('openContactModal')?.addEventListener('click', () => openModal('contactModal'));
-document.getElementById('closeContactModal')?.addEventListener('click', () => closeModal('contactModal'));
-document.getElementById('closeSuccessModal')?.addEventListener('click', () => closeModal('successModal'));
+$('#heroQuoteBtn')?.addEventListener('click',  () => openModal('contactModal'));
+$('#openContactModal')?.addEventListener('click', () => openModal('contactModal'));
+$('#closeContactModal')?.addEventListener('click', () => closeModal('contactModal'));
+$('#closeSuccessModal')?.addEventListener('click', () => closeModal('successModal'));
 
-// Click outside to close
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) closeModal(overlay.id);
-  });
+// Click outside
+$$('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay.id); });
 });
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    document.querySelectorAll('.modal-overlay.active').forEach(m => closeModal(m.id));
-    if (chatWidget?.classList.contains('open')) closeChat();
+    $$('.modal-overlay.open').forEach(m => closeModal(m.id));
+    closeChat();
   }
 });
 
-/* ─────────────────────────────────────────────
-   16. SUCCESS TONE
-───────────────────────────────────────────── */
-function playTone() {
+/* ════════════════════════════════════════════════════
+   16. SUCCESS CHIME
+════════════════════════════════════════════════════ */
+function playChime() {
   try {
-    const ctx   = new (window.AudioContext || window.webkitAudioContext)();
-    const notes = [523.25, 659.25, 783.99];
-    notes.forEach((freq, i) => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.18);
-      gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.18);
-      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + i * 0.18 + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 1.0);
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [523.25, 659.25, 783.99].forEach((f, i) => {
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = f;
+      g.gain.setValueAtTime(0, ctx.currentTime + i * 0.18);
+      g.gain.linearRampToValueAtTime(0.18, ctx.currentTime + i * 0.18 + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.95);
       osc.start(ctx.currentTime + i * 0.18);
-      osc.stop(ctx.currentTime + i * 0.18 + 1.1);
+      osc.stop(ctx.currentTime + i * 0.18 + 1);
     });
-  } catch { /* silent fail */ }
+  } catch { /* silent */ }
 }
 
-/* ─────────────────────────────────────────────
-   17. CONTACT FORMS — main + modal
-───────────────────────────────────────────── */
-async function handleFormSubmit(form, btn) {
+/* ════════════════════════════════════════════════════
+   17. FORM SUBMIT
+════════════════════════════════════════════════════ */
+async function handleForm(form, btn) {
   const invalids = [...form.querySelectorAll(':invalid')];
   if (invalids.length) {
     invalids.forEach(f => {
-      f.style.borderColor = 'rgba(239,68,68,0.7)';
-      f.style.boxShadow   = '0 0 0 3px rgba(239,68,68,0.1)';
+      f.style.borderColor = 'rgba(240,64,64,0.7)';
+      f.style.boxShadow   = '0 0 0 3px rgba(240,64,64,0.1)';
       f.addEventListener('input', () => { f.style.borderColor = ''; f.style.boxShadow = ''; }, { once: true });
     });
     invalids[0].focus();
-    Toast.error('Please fill in all required fields.');
+    Toast.error('Incomplete', 'Please fill in all required fields.');
     return;
   }
 
   const orig = btn.innerHTML;
-  btn.innerHTML = '<span style="opacity:.7">Sending…</span>';
+  btn.innerHTML = '<span style="opacity:.65">Sending…</span>';
   btn.disabled = true;
 
   try {
-    const res = await fetch(form.action, {
+    const r = await fetch(form.action, {
       method: 'POST',
       body: new FormData(form),
       headers: { Accept: 'application/json' }
     });
 
-    if (res.ok) {
+    if (r.ok) {
       form.reset();
-      playTone();
-      // Close contact modal if open
+      playChime();
       closeModal('contactModal');
       setTimeout(() => openModal('successModal'), 80);
-      // Browser notification
-      triggerBrowserNotification('✅ Request Sent!', 'FEMIX team will contact you shortly.');
-      Toast.success('Message sent! We\'ll get back to you soon.');
+      notify('✅ Request Received', 'FEMIX team will contact you shortly.');
+      Toast.success('Sent!', 'We\'ll get back to you within hours.');
     } else {
-      Toast.error('Send failed. Please try again or call us directly.');
+      Toast.error('Send failed', 'Please try again or call us directly.');
     }
   } catch {
-    Toast.error('Connection error. Please check your network and try again.');
+    Toast.error('Network error', 'Please check your connection and try again.');
   } finally {
     btn.innerHTML = orig;
     btn.disabled = false;
   }
 }
 
-document.getElementById('contactForm')?.addEventListener('submit', e => {
-  e.preventDefault();
-  handleFormSubmit(e.target, document.getElementById('submitBtn'));
-});
+$('#contactForm')?.addEventListener('submit', e => { e.preventDefault(); handleForm(e.target, $('#submitBtn')); });
+$('#modalContactForm')?.addEventListener('submit', e => { e.preventDefault(); handleForm(e.target, $('#modalSubmitBtn')); });
 
-document.getElementById('modalContactForm')?.addEventListener('submit', e => {
-  e.preventDefault();
-  handleFormSubmit(e.target, document.getElementById('modalSubmitBtn'));
-});
-
-/* ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════
    18. PWA + BROWSER NOTIFICATIONS
-───────────────────────────────────────────── */
-async function triggerBrowserNotification(title, body) {
+════════════════════════════════════════════════════ */
+async function notify(title, body) {
   if (!('Notification' in window)) return;
-
   if (Notification.permission === 'default') {
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') return;
+    await Notification.requestPermission();
   }
-
   if (Notification.permission === 'granted') {
     try {
-      new Notification(title, {
-        body,
-        icon: 'images/femix-logo.webp',
-        badge: 'images/femix-logo.webp',
-        tag: 'femix-notification'
-      });
-    } catch { /* Safari silent fail */ }
+      new Notification(title, { body, icon: 'images/femix-logo.webp', tag: 'femix' });
+    } catch { /* Safari */ }
   }
 }
 
-// Service Worker registration (PWA-ready)
+// Service worker
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => { /* No SW file = silent */ });
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-// Ask for notification permission after 15s
+// Invite notification permission after delay
 setTimeout(() => {
   if ('Notification' in window && Notification.permission === 'default') {
-    Toast.info('Enable notifications to receive updates from FEMIX Plumbing.');
+    Toast.info('Stay Updated', 'Enable notifications for FEMIX service alerts.', 6000);
   }
-}, 15000);
+}, 16000);
 
-/* ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════
    19. BACK TO TOP
-───────────────────────────────────────────── */
-const bttBtn = document.getElementById('btt');
+════════════════════════════════════════════════════ */
+const bttBtn = $('#btt');
 window.addEventListener('scroll', () => {
   if (!bttBtn) return;
-  const show = window.scrollY > 500;
+  const show = scrollY > 500;
   bttBtn.style.opacity = show ? '1' : '0';
   bttBtn.style.pointerEvents = show ? 'auto' : 'none';
-  bttBtn.classList.toggle('show', show);
+  bttBtn.tabIndex = show ? 0 : -1;
+  bttBtn.classList.toggle('visible', show);
 }, { passive: true });
 bttBtn?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
 
-/* ─────────────────────────────────────────────
+/* ════════════════════════════════════════════════════
    20. FOOTER YEAR
-───────────────────────────────────────────── */
-const yr = document.getElementById('yr');
+════════════════════════════════════════════════════ */
+const yr = $('#yr');
 if (yr) yr.textContent = new Date().getFullYear();
 
-/* ─────────────────────────────────────────────
-   21. AI CHATBOT — Claude API, streaming, fintech UI
-───────────────────────────────────────────── */
-(function () {
+/* ════════════════════════════════════════════════════
+   21. BUTTON RIPPLE
+════════════════════════════════════════════════════ */
+(function ripple() {
+  const style = document.createElement('style');
+  style.textContent = '@keyframes ripple{from{transform:scale(0);opacity:1}to{transform:scale(4);opacity:0}}';
+  document.head.appendChild(style);
 
-  const SYSTEM_PROMPT = `You are FEMIX AI — a sharp, professional, and friendly assistant for FEMIX Plumbing Services, based in Ile Ife, Osun State, Nigeria.
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-primary, .panel-cta, .btn-emg, .nav-cta');
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const dot = document.createElement('span');
+    dot.style.cssText = `
+      position:absolute;border-radius:50%;
+      width:70px;height:70px;margin:-35px;
+      background:rgba(255,255,255,0.15);pointer-events:none;
+      animation:ripple 0.55s ease-out forwards;
+      left:${e.clientX - r.left}px;top:${e.clientY - r.top}px;
+    `;
+    if (getComputedStyle(btn).position === 'static') btn.style.position = 'relative';
+    btn.style.overflow = 'hidden';
+    btn.appendChild(dot);
+    dot.addEventListener('animationend', () => dot.remove(), { once: true });
+  });
+})();
 
-COMPANY INFO:
-- Name: FEMIX Plumbing Services
-- Location: Ile Ife, Osun State, Nigeria  
-- Phone: +234 906 0708 332
-- Email: femixplumbingservices931@gmail.com
-- Hours: Mon–Sat 7am–7pm (24/7 Emergency available)
-- Est. 2019 · Licensed & Certified
+/* ════════════════════════════════════════════════════
+   22. AI CHATBOT — Claude API, streaming, premium UI
+════════════════════════════════════════════════════ */
+(function chatbot() {
 
-SERVICES:
-1. Residential Plumbing — leaks, pipes, bathroom/kitchen, heaters, drains
-2. Commercial & Estate — large buildings, hotels, offices, estates
-3. Water Systems & Borehole — boreholes, tanks, pumps, reticulation
-4. Bathroom & Kitchen — complete fit-outs, showers, fixtures
-5. Leak Detection & Diagnostics — non-invasive, underground, pressure testing
-6. Water Efficiency & Conservation — eco-retrofits, dual-flush, water-saving
-7. 24/7 Emergency — burst pipes, severe leaks, blocked drains, floods
+  const SYSTEM = `You are FEMIX AI — a sharp, warm, and professional assistant for FEMIX Plumbing Services in Ile Ife, Osun State, Nigeria.
 
-TONE: Professional yet warm. Concise (2–3 sentences max per point). Nigerian-friendly. Always include a follow-up or CTA. Never guess prices — always recommend a free quote. For emergencies, immediately give the phone number.`;
+KEY FACTS:
+• Phone: +234 906 0708 332  • Email: femixplumbingservices931@gmail.com
+• Location: Ile Ife, Osun State, Nigeria  • Hours: Mon–Sat 7am–7pm (24/7 Emergency)
+• Est. 2019 · Licensed & Certified
 
-  let history = [];
-  let isThinking = false;
+SERVICES: Residential plumbing · Commercial & estate · Water systems & boreholes · Bathroom & kitchen · Leak detection · Water efficiency · 24/7 emergency response
 
-  const chatWidget = document.getElementById('chatWidget');
-  const chatTrigger = document.getElementById('chatTrigger');
-  const chatPanel  = document.getElementById('chatPanel');
-  const chatBody   = document.getElementById('chatMessages');
-  const chatInput  = document.getElementById('chatInput');
-  const chatSend   = document.getElementById('chatSend');
-  const chatMin    = document.getElementById('chatMinimize');
-  const quickWrap  = document.getElementById('chatQuick');
+TONE: Professional, warm, concise (2–3 sentences max per point). Nigerian-friendly. Always CTA at end. No exact pricing — recommend free quote. Emergency? Give phone number immediately.`;
 
-  if (!chatWidget) return;
+  let history = [], busy = false;
 
-  /* Open / Close */
+  const widget  = $('#chatWidget');
+  const trigger = $('#chatTrigger');
+  const panel   = $('#chatPanel');
+  const log     = $('#chatMessages');
+  const input   = $('#chatInput');
+  const sendBtn = $('#chatSend');
+  const minBtn  = $('#chatMinimize');
+  const chips   = $('#chatQuick');
+
+  if (!widget) return;
+
+  // ── Open / Close ──
   function openChat() {
-    chatWidget.classList.add('open');
-    chatTrigger.setAttribute('aria-expanded', 'true');
-    chatPanel.setAttribute('aria-hidden', 'false');
-    if (!chatBody.hasChildNodes()) welcome();
-    setTimeout(() => chatInput?.focus(), 380);
+    widget.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+    panel.setAttribute('aria-hidden', 'false');
+    if (!log.hasChildNodes()) welcome();
+    setTimeout(() => input?.focus(), 380);
   }
 
   function closeChat() {
-    chatWidget.classList.remove('open');
-    chatTrigger.setAttribute('aria-expanded', 'false');
-    chatPanel.setAttribute('aria-hidden', 'true');
+    widget.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
+    panel.setAttribute('aria-hidden', 'true');
   }
 
-  chatTrigger.addEventListener('click', () => chatWidget.classList.contains('open') ? closeChat() : openChat());
-  chatMin?.addEventListener('click', closeChat);
+  // expose for keyboard handler above
+  window.closeChatIfOpen = closeChat;
 
-  /* Welcome */
+  trigger.addEventListener('click', () => widget.classList.contains('open') ? closeChat() : openChat());
+  minBtn?.addEventListener('click', closeChat);
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    if (widget.classList.contains('open') && !widget.contains(e.target)) closeChat();
+  });
+
+  // ── Welcome ──
   function welcome() {
     const h = new Date().getHours();
     const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    addBotMsg(`${g}! 👋 I'm the **FEMIX AI** assistant.\n\nI can help with service info, pricing, bookings, or connect you with our team directly. What do you need?`);
+    addBotMsg(`${g}! 👋 I'm the **FEMIX AI** assistant.\n\nI can help with service info, pricing, bookings, or connect you directly with our team. What do you need?`);
   }
 
-  /* Time string */
-  function timeStr() {
+  // ── Helpers ──
+  function ts() {
     const n = new Date();
-    return `${n.getHours() % 12 || 12}:${String(n.getMinutes()).padStart(2,'0')} ${n.getHours() >= 12 ? 'PM' : 'AM'}`;
+    return `${n.getHours() % 12 || 12}:${String(n.getMinutes()).padStart(2,'0')} ${n.getHours()>=12?'PM':'AM'}`;
   }
 
-  /* Format text */
-  function fmt(text) {
-    return text
+  function fmt(raw) {
+    return raw
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g,'<em>$1</em>')
       .replace(/\n/g,'<br>');
   }
 
-  /* Add bot message */
+  function scrollDown() { requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; }); }
+
+  // ── Add messages ──
   function addBotMsg(text) {
     const wrap = document.createElement('div');
-    wrap.className = 'chat-msg bot';
+    wrap.className = 'msg bot';
 
     const av = document.createElement('div');
-    av.className = 'msg-av'; av.setAttribute('aria-hidden','true'); av.textContent = '💧';
+    av.className = 'msg-avatar'; av.setAttribute('aria-hidden', 'true');
+    av.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
-    const col = document.createElement('div');
-    col.className = 'msg-col';
-
-    const bub = document.createElement('div');
-    bub.className = 'msg-bub';
+    const col = document.createElement('div'); col.className = 'msg-col';
+    const bub = document.createElement('div'); bub.className = 'msg-bubble';
     bub.innerHTML = fmt(text);
+    const t = document.createElement('div'); t.className = 'msg-ts'; t.textContent = ts();
 
-    const time = document.createElement('div');
-    time.className = 'msg-time'; time.textContent = timeStr();
-
-    col.append(bub, time);
+    col.append(bub, t);
     wrap.append(av, col);
-    chatBody.appendChild(wrap);
+    log.appendChild(wrap);
     scrollDown();
     return bub;
   }
 
-  /* Add user message */
   function addUserMsg(text) {
-    const wrap = document.createElement('div');
-    wrap.className = 'chat-msg user';
-
-    const col = document.createElement('div');
-    col.className = 'msg-col';
-
-    const bub = document.createElement('div');
-    bub.className = 'msg-bub';
-    bub.innerHTML = fmt(text);
-
-    const time = document.createElement('div');
-    time.className = 'msg-time'; time.textContent = timeStr();
-
-    col.append(bub, time);
-    wrap.appendChild(col);
-    chatBody.appendChild(wrap);
-    scrollDown();
+    const wrap = document.createElement('div'); wrap.className = 'msg user';
+    const col = document.createElement('div'); col.className = 'msg-col';
+    const bub = document.createElement('div'); bub.className = 'msg-bubble'; bub.innerHTML = fmt(text);
+    const t = document.createElement('div'); t.className = 'msg-ts'; t.textContent = ts();
+    col.append(bub, t); wrap.appendChild(col); log.appendChild(wrap); scrollDown();
   }
 
-  /* Typing indicator */
   function showTyping() {
-    const wrap = document.createElement('div');
-    wrap.className = 'chat-msg bot'; wrap.id = 'chatTyping';
-    const av = document.createElement('div');
-    av.className = 'msg-av'; av.textContent = '💧';
-    const ind = document.createElement('div');
-    ind.className = 'typing-ind';
-    ind.innerHTML = '<span></span><span></span><span></span>';
-    wrap.append(av, ind);
-    chatBody.appendChild(wrap);
-    scrollDown();
+    const wrap = document.createElement('div'); wrap.className = 'msg bot'; wrap.id = 'chatTyping';
+    const av = document.createElement('div'); av.className = 'msg-avatar';
+    av.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    const bub = document.createElement('div'); bub.className = 'typing-bubble';
+    bub.innerHTML = '<span></span><span></span><span></span>';
+    wrap.append(av, bub); log.appendChild(wrap); scrollDown();
+  }
+  function hideTyping() { $('#chatTyping')?.remove(); }
+
+  // ── Stream text word-by-word ──
+  async function streamText(text) {
+    const wrap = document.createElement('div'); wrap.className = 'msg bot';
+    const av = document.createElement('div'); av.className = 'msg-avatar';
+    av.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    const col = document.createElement('div'); col.className = 'msg-col';
+    const bub = document.createElement('div'); bub.className = 'msg-bubble typing-stream';
+    const t = document.createElement('div'); t.className = 'msg-ts'; t.textContent = ts();
+    col.append(bub, t); wrap.append(av, col); log.appendChild(wrap); scrollDown();
+
+    const words = text.split(' ');
+    let built = '';
+    for (const w of words) {
+      built += (built ? ' ' : '') + w;
+      bub.innerHTML = fmt(built);
+      scrollDown();
+      await new Promise(r => setTimeout(r, 22 + Math.random() * 22));
+    }
+    bub.classList.remove('typing-stream');
   }
 
-  function hideTyping() { document.getElementById('chatTyping')?.remove(); }
-  function scrollDown()  { requestAnimationFrame(() => { chatBody.scrollTop = chatBody.scrollHeight; }); }
-
-  /* Send message */
-  async function sendMsg(text) {
-    if (!text.trim() || isThinking) return;
-    isThinking = true;
-    chatSend.disabled = true;
-    chatInput.value = '';
-    chatInput.style.height = 'auto';
-
-    // Hide quick chips on first user message
-    if (quickWrap) quickWrap.style.display = 'none';
+  // ── Send ──
+  async function send(text) {
+    if (!text.trim() || busy) return;
+    busy = true;
+    sendBtn.disabled = true;
+    input.value = ''; input.style.height = 'auto';
+    if (chips) chips.style.display = 'none';
 
     addUserMsg(text);
     history.push({ role: 'user', content: text });
 
+    await new Promise(r => setTimeout(r, 380));
     showTyping();
-
-    // Simulate a brief delay before API call (feels more natural)
-    await new Promise(r => setTimeout(r, 400));
 
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -747,175 +772,63 @@ TONE: Professional yet warm. Concise (2–3 sentences max per point). Nigerian-f
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 600,
-          system: SYSTEM_PROMPT,
+          max_tokens: 550,
+          system: SYSTEM,
           messages: history
         })
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const data = await res.json();
-      const reply = data.content?.[0]?.text || "Sorry, I couldn't process that. Please call us at +234 906 0708 332.";
+      const d = await res.json();
+      const reply = d.content?.[0]?.text || "Sorry, I couldn't process that. Please call: +234 906 0708 332.";
 
       history.push({ role: 'assistant', content: reply });
-      if (history.length > 22) history = history.slice(-22);
+      if (history.length > 24) history = history.slice(-24);
 
       hideTyping();
-
-      // Streaming-style text reveal
       await streamText(reply);
 
     } catch (err) {
-      console.error('Chat error:', err);
+      console.error('Chat:', err);
       hideTyping();
-      const bub = addBotMsg("I'm having trouble connecting right now. Please:\n📞 **Call: +234 906 0708 332**\n✉️ Email: femixplumbingservices931@gmail.com");
-      bub.classList.add('error');
+      const b = addBotMsg("I'm having trouble connecting. Please:\n📞 **Call: +234 906 0708 332**\n✉️ femixplumbingservices931@gmail.com");
+      b.classList.add('err');
     } finally {
-      isThinking = false;
-      chatSend.disabled = chatInput.value.trim().length === 0;
+      busy = false;
+      sendBtn.disabled = !input.value.trim();
     }
   }
 
-  /* Streaming text animation */
-  async function streamText(fullText) {
-    const wrap = document.createElement('div');
-    wrap.className = 'chat-msg bot';
-    const av = document.createElement('div');
-    av.className = 'msg-av'; av.textContent = '💧';
-    const col = document.createElement('div');
-    col.className = 'msg-col';
-    const bub = document.createElement('div');
-    bub.className = 'msg-bub streaming';
-    const time = document.createElement('div');
-    time.className = 'msg-time'; time.textContent = timeStr();
-    col.append(bub, time);
-    wrap.append(av, col);
-    chatBody.appendChild(wrap);
-    scrollDown();
-
-    // Word-by-word stream
-    const words = fullText.split(' ');
-    let built = '';
-    for (const word of words) {
-      built += (built ? ' ' : '') + word;
-      bub.innerHTML = fmt(built);
-      scrollDown();
-      await new Promise(r => setTimeout(r, 28 + Math.random() * 25));
-    }
-    bub.classList.remove('streaming');
-  }
-
-  /* Input events */
-  chatInput?.addEventListener('input', () => {
-    chatSend.disabled = chatInput.value.trim().length === 0;
-    chatInput.style.height = 'auto';
-    chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+  // ── Events ──
+  input?.addEventListener('input', () => {
+    sendBtn.disabled = !input.value.trim();
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
   });
 
-  chatInput?.addEventListener('keydown', e => {
+  input?.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const t = chatInput.value.trim();
-      if (t) sendMsg(t);
+      const t = input.value.trim();
+      if (t) send(t);
     }
   });
 
-  chatSend?.addEventListener('click', () => {
-    const t = chatInput?.value.trim();
-    if (t) sendMsg(t);
+  sendBtn?.addEventListener('click', () => {
+    const t = input?.value.trim(); if (t) send(t);
   });
 
-  /* Quick chips */
-  document.querySelectorAll('.quick-chip').forEach(c => {
-    c.addEventListener('click', () => {
-      const msg = c.dataset.msg;
-      if (msg) sendMsg(msg);
-    });
-  });
+  $$('.chip').forEach(c => c.addEventListener('click', () => { const m = c.dataset.msg; if (m) send(m); }));
 
-  /* Close on outside click */
-  document.addEventListener('click', e => {
-    if (chatWidget.classList.contains('open') && !chatWidget.contains(e.target)) closeChat();
-  });
-
-  /* Auto-open after 10s on first visit */
-  if (!sessionStorage.getItem('femix-chat-v2')) {
+  // Auto-open once after 10s
+  if (!sessionStorage.getItem('femix-chat-v3')) {
     setTimeout(() => {
-      if (!chatWidget.classList.contains('open')) {
+      if (!widget.classList.contains('open')) {
         openChat();
-        sessionStorage.setItem('femix-chat-v2', '1');
-        Toast.info('💧 FEMIX AI is ready to help you!');
+        sessionStorage.setItem('femix-chat-v3', '1');
+        Toast.info('Hi there! 👋', 'FEMIX AI is ready to help with your plumbing questions.', 5000);
       }
     }, 10000);
   }
 
 })();
-
-/* ─────────────────────────────────────────────
-   22. MICRO-INTERACTIONS: Button ripple
-───────────────────────────────────────────── */
-document.querySelectorAll('.btn-primary, .btn-ghost, .svc-cta-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    const r = document.createElement('span');
-    r.style.cssText = `
-      position:absolute;border-radius:50%;
-      width:80px;height:80px;margin-left:-40px;margin-top:-40px;
-      background:rgba(255,255,255,0.12);pointer-events:none;
-      animation:ripple 0.55s ease-out forwards;
-      left:${e.offsetX}px;top:${e.offsetY}px;
-    `;
-    const style = document.createElement('style');
-    style.textContent = '@keyframes ripple{from{transform:scale(0);opacity:1}to{transform:scale(3.5);opacity:0}}';
-    if (!document.getElementById('rippleStyle')) {
-      style.id = 'rippleStyle';
-      document.head.appendChild(style);
-    }
-    if (getComputedStyle(btn).position === 'static') btn.style.position = 'relative';
-    btn.appendChild(r);
-    r.addEventListener('animationend', () => r.remove(), { once: true });
-  });
-});
-
-/* ─────────────────────────────────────────────
-   23. SECTION PROGRESS INDICATOR
-───────────────────────────────────────────── */
-(function () {
-  const bar = document.createElement('div');
-  bar.style.cssText = `
-    position:fixed;top:0;left:0;height:2px;z-index:9999;
-    background:linear-gradient(90deg,#C8A44A,#F5D990,#3D6FFF);
-    transition:width 0.1s ease;pointer-events:none;width:0%;
-  `;
-  document.body.appendChild(bar);
-
-  window.addEventListener('scroll', () => {
-    const h = document.documentElement.scrollHeight - window.innerHeight;
-    bar.style.width = h > 0 ? `${(window.scrollY / h) * 100}%` : '0%';
-  }, { passive: true });
-})();
-
-
-document.addEventListener("contextmenu", function(e) {
-  e.preventDefault();
-});
-
-document.addEventListener("keydown", function(e) {
-  // Convert key to lowercase so it catches 'C' and 'c'
-  const key = e.key.toLowerCase(); 
-  
-  if (e.ctrlKey && (key === "c" || key === "u" || key === "s" || key === "a" || key === "p")) {
-    e.preventDefault();
-    alert("Content is protected by FEMIX Plumbing."); // Optional: lets them know why it failed
-  }
-});
-
-document.addEventListener("visibilitychange", function() {
-  if (document.hidden) {
-    document.body.style.filter = "blur(10px)";
-  } else {
-    document.body.style.filter = "none";
-  }
-});
-
-
